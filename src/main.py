@@ -17,17 +17,15 @@ from src.utils import (
     close_thread,
     is_last_message_stale,
     discord_message_to_message,
+    save_a_copy,
 )
+import io
 from src import completion
 from src.completion import generate_completion_response, process_response
 from src.moderation import (
     moderate_message,
     send_moderation_blocked_message,
     send_moderation_flagged_message,
-)
-
-logging.basicConfig(
-    format="[%(asctime)s] [%(filename)s:%(lineno)d] %(message)s", level=logging.INFO
 )
 
 intents = discord.Intents.default()
@@ -51,6 +49,25 @@ async def on_ready():
                 messages.append(m)
         completion.MY_BOT_EXAMPLE_CONVOS.append(Conversation(messages=messages))
     await tree.sync()
+
+# /chat message:
+@tree.command(name="save_convo", description="Saves a copy of the conversation, same as the Save a copy button")
+@discord.app_commands.checks.has_permissions(send_messages=True)
+@discord.app_commands.checks.has_permissions(view_channel=True)
+@discord.app_commands.checks.bot_has_permissions(send_messages=True)
+@discord.app_commands.checks.bot_has_permissions(view_channel=True)
+async def save_conversation_command(interaction: discord.Interaction, thread_message_id: str):
+    try:
+        await save_a_copy(interaction=interaction, thread_message_id=int(thread_message_id))
+    except Exception as e:
+        await interaction.response.send_message(content=f"**Error**: Failed to save. {str(e)}", ephemeral=True)
+
+@tree.context_menu(name="Save Conversation")
+async def save_menu(interaction: discord.Interaction, message: discord.Message):
+    try:
+        await save_a_copy(interaction=interaction, thread_message_id=message.id)
+    except Exception as e:
+        await interaction.response.send_message(content=f"**Error**: Failed to save. {str(e)}", ephemeral=True)
 
 
 # /chat message:
@@ -124,6 +141,7 @@ async def chat_command(int: discord.Interaction, message: str):
             reason="gpt-bot",
             auto_archive_duration=60,
         )
+
         async with thread.typing():
             # fetch completion
             messages = [Message(user=user.name, text=message)]
@@ -136,21 +154,25 @@ async def chat_command(int: discord.Interaction, message: str):
             )
     except Exception as e:
         logger.exception(e)
-        await int.response.send_message(
-            f"Failed to start chat {str(e)}", ephemeral=True
-        )
+        try:
+            await int.response.send_message(
+                f"Failed to start chat {str(e)}", ephemeral=True
+            )
+        except Exception as e:
+            logger.exception(e)
+
 
 
 # calls for each message
 @client.event
 async def on_message(message: DiscordMessage):
     try:
-        # block servers not in allow list
-        if should_block(guild=message.guild):
-            return
-
         # ignore messages from the bot
         if message.author == client.user:
+            return
+
+        # block servers not in allow list
+        if should_block(guild=message.guild):
             return
 
         # ignore messages not in a thread
@@ -236,7 +258,7 @@ async def on_message(message: DiscordMessage):
         )
 
         channel_messages = [
-            discord_message_to_message(message)
+            await discord_message_to_message(message)
             async for message in thread.history(limit=MAX_THREAD_MESSAGES)
         ]
         channel_messages = [x for x in channel_messages if x is not None]
