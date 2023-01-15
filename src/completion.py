@@ -3,11 +3,6 @@ from dataclasses import dataclass
 import openai
 from src.moderation import moderate_message
 from typing import Optional, List
-from src.constants import (
-    BOT_INSTRUCTIONS,
-    BOT_NAME,
-    EXAMPLE_CONVOS,
-)
 import discord
 from src.base import Message, Prompt, Conversation
 from src.utils import split_into_shorter_messages, close_thread, logger
@@ -15,10 +10,6 @@ from src.moderation import (
     send_moderation_flagged_message,
     send_moderation_blocked_message,
 )
-
-MY_BOT_NAME = BOT_NAME
-MY_BOT_EXAMPLE_CONVOS = EXAMPLE_CONVOS
-
 
 class CompletionResult(Enum):
     OK = 0
@@ -37,15 +28,16 @@ class CompletionData:
 
 
 async def generate_completion_response(
+    bot_name: str,
+    bot_instruction:str,
     messages: List[Message], user: str
 ) -> CompletionData:
     try:
         prompt = Prompt(
             header=Message(
-                "System", f"Instructions for {MY_BOT_NAME}: {BOT_INSTRUCTIONS}"
+                "System", f"Instructions for {bot_name}: {bot_instruction}"
             ),
-            examples=MY_BOT_EXAMPLE_CONVOS,
-            convo=Conversation(messages + [Message(MY_BOT_NAME)]),
+            convo=Conversation(messages + [Message(bot_name)]),
         )
         rendered = prompt.render()
         response = openai.Completion.create(

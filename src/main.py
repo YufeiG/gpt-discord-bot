@@ -5,7 +5,6 @@ from src.base import Message, Conversation
 from src.constants import (
     BOT_INVITE_URL,
     DISCORD_BOT_TOKEN,
-    EXAMPLE_CONVOS,
     ACTIVATE_THREAD_PREFX,
     MAX_THREAD_MESSAGES,
     SECONDS_DELAY_RECEIVING_MSG,
@@ -19,6 +18,7 @@ from src.utils import (
     discord_message_to_message,
     save_a_copy,
 )
+import re
 import io
 from src import completion
 from src.completion import generate_completion_response, process_response
@@ -31,23 +31,16 @@ from src.moderation import (
 intents = discord.Intents.default()
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+class PersistentClient(discord.Client):
+    async def setup_hook(self) -> None:
+        self.add_view(CharacterEmbedView())
+client = PersistentClient(intents=intents)
 tree = discord.app_commands.CommandTree(client)
 
 
 @client.event
 async def on_ready():
     logger.info(f"We have logged in as {client.user}. Invite URL: {BOT_INVITE_URL}")
-    completion.MY_BOT_NAME = client.user.name
-    completion.MY_BOT_EXAMPLE_CONVOS = []
-    for c in EXAMPLE_CONVOS:
-        messages = []
-        for m in c.messages:
-            if m.user == "Lenard":
-                messages.append(Message(user=client.user.name, text=m.text))
-            else:
-                messages.append(m)
-        completion.MY_BOT_EXAMPLE_CONVOS.append(Conversation(messages=messages))
     await tree.sync()
 
 # /chat message:
@@ -69,15 +62,40 @@ async def save_menu(interaction: discord.Interaction, message: discord.Message):
     except Exception as e:
         await interaction.response.send_message(content=f"**Error**: Failed to save. {str(e)}", ephemeral=True)
 
+class CharacterEmbedView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
-# /chat message:
-@tree.command(name="chat", description="Create a new thread for conversation")
+    @discord.ui.button(label="Start Chat", custom_id="chat", style=discord.ButtonStyle.green)
+    async def chat_action(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        if interaction.guild is None:
+            return
+        if interaction.message is None or len(interaction.message.embeds) == 0:
+            return
+        embed = interaction.message.embeds[0]
+        if len(embed.fields) == 0:
+            return
+        instruction = embed.fields[0].value
+        match = re.search("<@(\d+)>", embed.description)
+        if not match:
+            return
+        instruction_user_id = str(match.group(1))
+
+        member = await interaction.guild.fetch_member(instruction_user_id)
+        if member is None:
+            member = "Unknown"
+        await create_chat(int=interaction, instructions_user_name=member.name, instructions=instruction)
+
+# /characterize message:
+@tree.command(name="characterize", description="Write character instructions for how the bot should act.")
 @discord.app_commands.checks.has_permissions(send_messages=True)
 @discord.app_commands.checks.has_permissions(view_channel=True)
 @discord.app_commands.checks.bot_has_permissions(send_messages=True)
 @discord.app_commands.checks.bot_has_permissions(view_channel=True)
 @discord.app_commands.checks.bot_has_permissions(manage_threads=True)
-async def chat_command(int: discord.Interaction, message: str):
+async def character_command(int: discord.Interaction, instructions: str):
     try:
         # only support creating thread in text channel
         if not isinstance(int.channel, discord.TextChannel):
@@ -88,29 +106,88 @@ async def chat_command(int: discord.Interaction, message: str):
             return
 
         user = int.user
-        logger.info(f"Chat command by {user} {message[:20]}")
+        logger.info(f"Character command by {user} {instructions[:20]}")
+        # moderate the message
+        flagged_str, blocked_str = moderate_message(message=instructions, user=user)
+        await send_moderation_blocked_message(
+                        guild=int.guild,
+                        user=user,
+                        blocked_str=blocked_str,
+                        message=instructions,
+                    )
+        if len(blocked_str) > 0:
+            # message was blocked
+            await int.response.send_message(
+                f"Your prompt has been blocked by moderation.\n{instructions}",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(
+            description=f"<@{user.id}> created a character! 🎬🤖",
+            color=discord.Color.blue(),
+        )
+        embed.add_field(name="Instructions", value=instructions)
+        if len(flagged_str) > 0:
+            # message was flagged
+            embed.color = discord.Color.yellow()
+            embed.title = "⚠️ This prompt was flagged by moderation."
+
+        view = CharacterEmbedView()
+        await int.response.send_message(embed=embed, view=view)
+        response = await int.original_response()
+
+        await send_moderation_flagged_message(
+            guild=int.guild,
+            user=user,
+            flagged_str=flagged_str,
+            message=instructions,
+            url=response.jump_url,
+        )
+    except Exception as e:
+        logger.exception(e)
+        try:
+            await int.response.send_message(
+                f"Failed to start characterize {str(e)}", ephemeral=True
+            )
+        except Exception as e:
+            logger.exception(e)
+
+
+async def create_chat(int: discord.Interaction, instructions_user_name: str, instructions: str):
+    try:
+        # only support creating thread in text channel
+        if not isinstance(int.channel, discord.TextChannel):
+            return
+
+        # block servers not in allow list
+        if should_block(guild=int.guild):
+            return
+
+        user = int.user
+        logger.info(f"Create chat by {user}")
         try:
             # moderate the message
-            flagged_str, blocked_str = moderate_message(message=message, user=user)
+            flagged_str, blocked_str = moderate_message(message=instructions, user=user)
             await send_moderation_blocked_message(
                 guild=int.guild,
                 user=user,
                 blocked_str=blocked_str,
-                message=message,
+                message=instructions,
             )
             if len(blocked_str) > 0:
                 # message was blocked
                 await int.response.send_message(
-                    f"Your prompt has been blocked by moderation.\n{message}",
+                    f"Your prompt has been blocked by moderation.\n{instructions}",
                     ephemeral=True,
                 )
                 return
 
             embed = discord.Embed(
                 description=f"<@{user.id}> wants to chat! 🤖💬",
-                color=discord.Color.green(),
+                color=discord.Color.teal(),
             )
-            embed.add_field(name=user.name, value=message)
+            embed.add_field(name=f"Instructions by {instructions_user_name}", value=instructions)
 
             if len(flagged_str) > 0:
                 # message was flagged
@@ -124,7 +201,7 @@ async def chat_command(int: discord.Interaction, message: str):
                 guild=int.guild,
                 user=user,
                 flagged_str=flagged_str,
-                message=message,
+                message=instructions,
                 url=response.jump_url,
             )
         except Exception as e:
@@ -136,22 +213,11 @@ async def chat_command(int: discord.Interaction, message: str):
 
         # create the thread
         thread = await response.create_thread(
-            name=f"{ACTIVATE_THREAD_PREFX} {user.name[:20]} - {message[:30]}",
+            name=f"{ACTIVATE_THREAD_PREFX} {user.name[:20]} - {instructions[:30]}",
             slowmode_delay=1,
             reason="gpt-bot",
             auto_archive_duration=60,
         )
-
-        async with thread.typing():
-            # fetch completion
-            messages = [Message(user=user.name, text=message)]
-            response_data = await generate_completion_response(
-                messages=messages, user=user
-            )
-            # send the result
-            await process_response(
-                user=user, thread=thread, response_data=response_data
-            )
     except Exception as e:
         logger.exception(e)
         try:
@@ -262,11 +328,16 @@ async def on_message(message: DiscordMessage):
             async for message in thread.history(limit=MAX_THREAD_MESSAGES)
         ]
         channel_messages = [x for x in channel_messages if x is not None]
+        prompt = "You are a discord user"
+        if channel_messages[-1].user == "System":
+            prompt = channel_messages.pop()
         channel_messages.reverse()
 
         # generate the response
         async with thread.typing():
             response_data = await generate_completion_response(
+                bot_name=client.user.name,
+                bot_instruction=prompt,
                 messages=channel_messages, user=message.author
             )
 
