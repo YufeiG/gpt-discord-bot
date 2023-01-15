@@ -218,6 +218,19 @@ async def create_chat(int: discord.Interaction, instructions_user_name: str, ins
             reason="gpt-bot",
             auto_archive_duration=60,
         )
+        # generate the response
+        async with thread.typing():
+            response_data = await generate_completion_response(
+                bot_name=client.user.name,
+                bot_instruction=instructions,
+                messages=[], 
+                user=int.user.name,
+            )
+
+        # send response
+        await process_response(
+            user=int.user.name, thread=thread, response_data=response_data
+        )
     except Exception as e:
         logger.exception(e)
         try:
@@ -338,7 +351,7 @@ async def on_message(message: DiscordMessage):
             response_data = await generate_completion_response(
                 bot_name=client.user.name,
                 bot_instruction=prompt,
-                messages=channel_messages, user=message.author
+                messages=channel_messages, user=str(message.author.id)
             )
 
         if is_last_message_stale(

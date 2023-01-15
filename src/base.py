@@ -42,7 +42,8 @@ class Prompt:
 
     def render(self):
         return f"\n{SEPARATOR_TOKEN}".join(
-            [self.header.render()]
+            ["YOU ARE AN ACTOR! FOLLOW YOUR INSTRUCTIONS TO ACT OUT THE CHARACTER AND THE SCENE.\n",
+            self.header.render()]
             + [Message("System", "Conversation:").render()]
             + [self.convo.render()],
         )
