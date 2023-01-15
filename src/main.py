@@ -108,7 +108,7 @@ async def chat_command(int: discord.Interaction, message: str):
 
             embed = discord.Embed(
                 description=f"<@{user.id}> wants to chat! 🤖💬",
-                color=discord.Color.green(),
+                color=discord.Color.teal(),
             )
             embed.add_field(name=user.name, value=message)
 
