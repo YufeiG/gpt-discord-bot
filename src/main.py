@@ -125,7 +125,7 @@ async def character_command(int: discord.Interaction, instructions: str):
 
         embed = discord.Embed(
             description=f"<@{user.id}> created a character! 🎬🤖",
-            color=discord.Color.blue(),
+            color=discord.Color.blurple(),
         )
         embed.add_field(name="Instructions", value=instructions)
         if len(flagged_str) > 0:
@@ -185,7 +185,7 @@ async def create_chat(int: discord.Interaction, instructions_user_name: str, ins
 
             embed = discord.Embed(
                 description=f"<@{user.id}> wants to chat! 🤖💬",
-                color=discord.Color.teal(),
+                color=discord.Color.from_str("#e7779d"),
             )
             embed.add_field(name=f"Instructions by {instructions_user_name}", value=instructions)
 
