@@ -71,17 +71,17 @@ class CompletionsConfig:
         if max_tokens_str is not None:
             try:
                 self.max_tokens = int(max_tokens_str)
-                self.max_tokens = max(min(self.max_tokens, 512), 1)
+                self.max_tokens = max(min(self.max_tokens, 300), 1)
             except ValueError:
-                self.max_tokens = 512
+                self.max_tokens = 300
         else:
-            self.max_tokens = 512
+            self.max_tokens = 300
     def to_str(self) -> str:
-        return f"temp:{self.temperature},topp:{self.top_p},presp:{self.presence_penalty},freqp:{self.frequency_penalty},maxt:{self.max_tokens}"
+        return f"temperature:{self.temperature},top_p:{self.top_p},presence_penalty:{self.presence_penalty},frequency_penalty:{self.frequency_penalty},max_tokens:{self.max_tokens}"
 
     @classmethod
     def from_str(cls, str) -> "CompletionsConfig":
-        matches = re.match('temp:([\d\.]+),topp:([\d\.]+),presp:([\d\.]+),freqp:([\d\.]+),maxt:([\d\.]+)', str)
+        matches = re.match('temperature:([\d\.]+),top_p:([\d\.]+),presence_penalty:([\d\.]+),frequency_penalty:([\d\.]+),max_tokens:([\d\.]+)', str)
         if matches is not None:
             temp, topp, presp, freqp, maxt = matches.groups()
             return CompletionsConfig(temp_str=temp, top_str=topp, pres_str=presp, freq_str=freqp, max_tokens_str=maxt)
@@ -109,7 +109,7 @@ async def generate_completion_response(
             stop=["<|endoftext|>"],
             presence_penalty=config.presence_penalty,
             frequency_penalty=config.frequency_penalty,
-            logit_bias={"25":-80, "1298": -80, "2599": -80, "1058": -80}, # all to avoid :
+            logit_bias={"25":-80, "1298": -80, "2599": -80, "1058": -80, "47308": -80, "11207": -80}, # all to avoid :
             user=user,
         )
         reply = response.choices[0].text.strip()
