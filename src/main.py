@@ -428,10 +428,11 @@ async def on_message(message: DiscordMessage):
                 embed = original_message.embeds[0]
                 if len(embed.fields) > 0:
                     prompt = embed.fields[0].value
-                if isinstance(embed.footer, str):
-                    config = CompletionsConfig.from_str(embed.footer)
-                else:
-                    config = CompletionsConfig.from_str(embed.footer.text)
+                if embed.footer is not None:
+                    if isinstance(embed.footer, str):
+                        config = CompletionsConfig.from_str(embed.footer)
+                    else:
+                        config = CompletionsConfig.from_str(embed.footer.text)
 
                         
 
