@@ -109,7 +109,7 @@ async def generate_completion_response(
             stop=["<|endoftext|>"],
             presence_penalty=config.presence_penalty,
             frequency_penalty=config.frequency_penalty,
-            logit_bias={"25":-80},
+            logit_bias={"25":-80, "1298": -80, "2599": -80},
             user=user,
         )
         reply = response.choices[0].text.strip()
