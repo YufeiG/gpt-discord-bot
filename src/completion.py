@@ -10,6 +10,7 @@ from src.moderation import (
     send_moderation_flagged_message,
     send_moderation_blocked_message,
 )
+import re
 
 class CompletionResult(Enum):
     OK = 0
@@ -26,11 +27,62 @@ class CompletionData:
     reply_text: Optional[str]
     status_text: Optional[str]
 
+class CompletionsConfig:
+    temperature: float
+    top_p: float
+    presence_penalty: float
+    frequency_penalty: float
+
+    def __init__(self, temp_str: Optional[str]=None, top_str: Optional[str]=None, pres_str: Optional[str]=None, freq_str: Optional[str]=None) -> None:
+        if temp_str is not None:
+            try:
+                self.temperature = float(temp_str)
+                self.temperature = max(min(self.temperature, 2), 0)
+            except ValueError:
+                self.temperature = 1.2
+        else:
+            self.temperature = 1.2
+        if top_str is not None:
+            try:
+                self.top_p = float(top_str)
+                self.top_p = max(min(self.top_p, 1), 0)
+            except ValueError:
+                self.top_p = 1.0
+        else:
+            self.top_p = 1.0
+
+        if pres_str is not None:
+            try:
+                self.presence_penalty = float(pres_str)
+                self.presence_penalty = max(min(self.presence_penalty, 2), -2)
+            except ValueError:
+                self.presence_penalty = 0
+        else:
+            self.presence_penalty = 0
+        if freq_str is not None:
+            try:
+                self.frequency_penalty = float(freq_str)
+                self.frequency_penalty = max(min(self.frequency_penalty, 2), -2)
+            except ValueError:
+                self.frequency_penalty = 0
+        else:
+            self.frequency_penalty = 0
+    
+    def to_str(self) -> str:
+        return f"temp:{self.temperature},topp:{self.top_p},presp:{self.presence_penalty},freqp:{self.frequency_penalty}"
+
+    @classmethod
+    def from_str(cls, str) -> "CompletionsConfig":
+        matches = re.match('temp:([\d\.]+),topp:([\d\.]+),presp:([\d\.]+),freqp:([\d\.]+)', str)
+        if matches is not None:
+            temp, topp, presp, freqp = matches.groups()
+            return CompletionsConfig(temp_str=temp, top_str=topp, pres_str=presp, freq_str=freqp)
+        return CompletionsConfig()
 
 async def generate_completion_response(
     bot_name: str,
     bot_instruction:str,
-    messages: List[Message], user: str
+    messages: List[Message], user: str, config: CompletionsConfig
 ) -> CompletionData:
     try:
         prompt = Prompt(
@@ -43,10 +95,12 @@ async def generate_completion_response(
         response = openai.Completion.create(
             engine="text-davinci-003",
             prompt=rendered,
-            temperature=1.2,
-            top_p=1,
+            temperature=config.temperature,
+            top_p=config.top_p,
             max_tokens=512,
             stop=["<|endoftext|>"],
+            presence_penalty=config.presence_penalty,
+            frequency_penalty=config.frequency_penalty,
             user=user,
         )
         reply = response.choices[0].text.strip()

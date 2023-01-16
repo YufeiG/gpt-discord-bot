@@ -20,16 +20,7 @@ async def discord_message_to_message(message: DiscordMessage) -> Optional[Messag
         message.type == discord.MessageType.thread_starter_message
         and message.reference
     ):
-        original_message = message.reference.cached_message
-        if not original_message:
-            channel = await message.guild.fetch_channel(message.reference.channel_id)
-            if channel:
-                original_message = await channel.fetch_message(message.reference.message_id)
-
-        if len(original_message.embeds) > 0 and len(original_message.embeds[0].fields) > 0:
-            field = original_message.embeds[0].fields[0]
-            if field.value:
-                return Message(user="System", text=field.value)
+        return None
     else:
         if message.content:
             return Message(user=message.author.name, text=message.content)

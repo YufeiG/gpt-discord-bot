@@ -21,7 +21,7 @@ from src.utils import (
 import re
 import io
 from src import completion
-from src.completion import generate_completion_response, process_response
+from src.completion import generate_completion_response, process_response, CompletionsConfig
 from src.moderation import (
     moderate_message,
     send_moderation_blocked_message,
@@ -86,7 +86,81 @@ class CharacterEmbedView(discord.ui.View):
         member = await interaction.guild.fetch_member(instruction_user_id)
         if member is None:
             member = "Unknown"
-        await create_chat(int=interaction, instructions_user_name=member.name, instructions=instruction)
+        await create_chat(int=interaction, instructions_user_name=member.name, instructions=instruction, config=CompletionsConfig())
+
+    @discord.ui.button(label="Customize API & Start Chat", custom_id="api", style=discord.ButtonStyle.secondary)
+    async def api_action(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        if interaction.guild is None:
+            return
+        if interaction.message is None or len(interaction.message.embeds) == 0:
+            return
+        embed = interaction.message.embeds[0]
+        if len(embed.fields) == 0:
+            return
+        instruction = embed.fields[0].value
+        match = re.search("<@(\d+)>", embed.description)
+        if not match:
+            return
+        instruction_user_id = str(match.group(1))
+
+        member = await interaction.guild.fetch_member(instruction_user_id)
+        if member is None:
+            member = "Unknown"
+        form = CustomizeForm(instructions=instruction, instructions_user_name=member.name)
+        await interaction.response.send_modal(
+            form
+        )
+class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
+    def __init__(
+        self, instructions: str, instructions_user_name: str
+    ):
+        super().__init__(timeout=None)
+        self.instructions = instructions
+        self.instructions_user_name = instructions_user_name
+        self.temp = discord.ui.TextInput(
+            label=f"temperature: number [0, 2]",
+            placeholder="1.1",
+            style=discord.TextStyle.short,
+            required=False,
+        )
+        self.top_p = discord.ui.TextInput(
+            label=f"top_p: number [0, 1]",
+            placeholder="1.0",
+            style=discord.TextStyle.short,
+            required=False,
+        )
+        self.presence = discord.ui.TextInput(
+            label=f"presence_penalty: number [-2. 2]",
+            placeholder="0.0",
+            style=discord.TextStyle.short,
+            required=False,
+        )
+        self.freq = discord.ui.TextInput(
+            label=f"frequency_penalty: number [-2, 2]",
+            placeholder="0.0",
+            style=discord.TextStyle.short,
+            required=False,
+        )
+        self.add_item(self.temp)
+        self.add_item(self.top_p)
+        self.add_item(self.presence)
+        self.add_item(self.freq)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        temp = self.temp.value
+        topp = self.top_p.value
+        pres = self.presence.value
+        freq = self.freq.value
+
+        await create_chat(int=interaction, instructions_user_name=self.instructions_user_name, instructions=self.instructions, config=CompletionsConfig(temp_str=temp, top_str=topp, pres_str=pres, freq_str=freq))
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception):
+        await interaction.response.send_message(
+            f"**There was an error creating chat.**\n{str(error)}",
+            ephemeral=True,
+        )
 
 # /characterize message:
 @tree.command(name="characterize", description="Write character instructions for how the bot should act.")
@@ -104,7 +178,6 @@ async def character_command(int: discord.Interaction, instructions: str):
         # block servers not in allow list
         if should_block(guild=int.guild):
             return
-
         user = int.user
         logger.info(f"Character command by {user} {instructions[:20]}")
         # moderate the message
@@ -154,7 +227,7 @@ async def character_command(int: discord.Interaction, instructions: str):
             logger.exception(e)
 
 
-async def create_chat(int: discord.Interaction, instructions_user_name: str, instructions: str):
+async def create_chat(int: discord.Interaction, instructions_user_name: str, instructions: str, config: CompletionsConfig):
     try:
         # only support creating thread in text channel
         if not isinstance(int.channel, discord.TextChannel):
@@ -188,6 +261,7 @@ async def create_chat(int: discord.Interaction, instructions_user_name: str, ins
                 color=discord.Color.from_str("#e7779d"),
             )
             embed.add_field(name=f"Instructions by {instructions_user_name}", value=instructions)
+            embed.set_footer(text=config.to_str())
 
             if len(flagged_str) > 0:
                 # message was flagged
@@ -225,6 +299,7 @@ async def create_chat(int: discord.Interaction, instructions_user_name: str, ins
                 bot_instruction=instructions,
                 messages=[], 
                 user=int.user.name,
+                config=config,
             )
 
         # send response
@@ -336,14 +411,23 @@ async def on_message(message: DiscordMessage):
             f"Thread message to process - {message.author}: {message.content[:50]} - {thread.name} {thread.jump_url}"
         )
 
+        channel = await message.guild.fetch_channel(message.reference.channel_id)
+        prompt = "You are a discord user"
+        config = CompletionsConfig()
+        if channel:
+            original_message = await channel.fetch_message(message.reference.message_id)
+            if original_message is not None and len(original_message.embeds) > 0:
+                embed = original_message.embeds[0]
+                if len(embed.fields) > 0:
+                    prompt = embed.fields[0].value
+                config = CompletionsConfig.from_str(embed.footer)
+                        
+
         channel_messages = [
             await discord_message_to_message(message)
             async for message in thread.history(limit=MAX_THREAD_MESSAGES)
         ]
         channel_messages = [x for x in channel_messages if x is not None]
-        prompt = "You are a discord user"
-        if channel_messages[-1].user == "System":
-            prompt = channel_messages.pop()
         channel_messages.reverse()
 
         # generate the response
@@ -351,7 +435,7 @@ async def on_message(message: DiscordMessage):
             response_data = await generate_completion_response(
                 bot_name=client.user.name,
                 bot_instruction=prompt,
-                messages=channel_messages, user=str(message.author.id)
+                messages=channel_messages, user=str(message.author.id), config=config,
             )
 
         if is_last_message_stale(
