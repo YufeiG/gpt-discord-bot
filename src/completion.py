@@ -32,8 +32,9 @@ class CompletionsConfig:
     top_p: float
     presence_penalty: float
     frequency_penalty: float
+    max_tokens: int
 
-    def __init__(self, temp_str: Optional[str]=None, top_str: Optional[str]=None, pres_str: Optional[str]=None, freq_str: Optional[str]=None) -> None:
+    def __init__(self, temp_str: Optional[str]=None, top_str: Optional[str]=None, pres_str: Optional[str]=None, freq_str: Optional[str]=None, max_tokens_str: Optional[str] = None) -> None:
         if temp_str is not None:
             try:
                 self.temperature = float(temp_str)
@@ -67,16 +68,23 @@ class CompletionsConfig:
                 self.frequency_penalty = 0
         else:
             self.frequency_penalty = 0
-    
+        if max_tokens_str is not None:
+            try:
+                self.max_tokens = int(max_tokens_str)
+                self.max_tokens = max(min(self.max_tokens, 512), 1)
+            except ValueError:
+                self.max_tokens = 512
+        else:
+            self.max_tokens = 512
     def to_str(self) -> str:
-        return f"temp:{self.temperature},topp:{self.top_p},presp:{self.presence_penalty},freqp:{self.frequency_penalty}"
+        return f"temp:{self.temperature},topp:{self.top_p},presp:{self.presence_penalty},freqp:{self.frequency_penalty},maxt:{self.max_tokens}"
 
     @classmethod
     def from_str(cls, str) -> "CompletionsConfig":
-        matches = re.match('temp:([\d\.]+),topp:([\d\.]+),presp:([\d\.]+),freqp:([\d\.]+)', str)
+        matches = re.match('temp:([\d\.]+),topp:([\d\.]+),presp:([\d\.]+),freqp:([\d\.]+),maxt:([\d\.]+)', str)
         if matches is not None:
-            temp, topp, presp, freqp = matches.groups()
-            return CompletionsConfig(temp_str=temp, top_str=topp, pres_str=presp, freq_str=freqp)
+            temp, topp, presp, freqp, maxt = matches.groups()
+            return CompletionsConfig(temp_str=temp, top_str=topp, pres_str=presp, freq_str=freqp, max_tokens_str=maxt)
         return CompletionsConfig()
 
 async def generate_completion_response(
@@ -97,10 +105,11 @@ async def generate_completion_response(
             prompt=rendered,
             temperature=config.temperature,
             top_p=config.top_p,
-            max_tokens=512,
+            max_tokens=config.max_tokens,
             stop=["<|endoftext|>"],
             presence_penalty=config.presence_penalty,
             frequency_penalty=config.frequency_penalty,
+            logit_bias={"25":-80},
             user=user,
         )
         reply = response.choices[0].text.strip()

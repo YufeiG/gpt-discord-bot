@@ -143,18 +143,26 @@ class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
             style=discord.TextStyle.short,
             required=False,
         )
+        self.maxt = discord.ui.TextInput(
+            label=f"max_tokens: integer [1, 512]",
+            placeholder="512",
+            style=discord.TextStyle.short,
+            required=False,
+        )
         self.add_item(self.temp)
         self.add_item(self.top_p)
         self.add_item(self.presence)
         self.add_item(self.freq)
+        self.add_item(self.maxt)
 
     async def on_submit(self, interaction: discord.Interaction):
         temp = self.temp.value
         topp = self.top_p.value
         pres = self.presence.value
         freq = self.freq.value
+        maxt = self.maxt.value
 
-        await create_chat(int=interaction, instructions_user_name=self.instructions_user_name, instructions=self.instructions, config=CompletionsConfig(temp_str=temp, top_str=topp, pres_str=pres, freq_str=freq))
+        await create_chat(int=interaction, instructions_user_name=self.instructions_user_name, instructions=self.instructions, config=CompletionsConfig(temp_str=temp, top_str=topp, pres_str=pres, freq_str=freq, max_tokens_str=maxt))
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
         await interaction.response.send_message(
@@ -411,16 +419,20 @@ async def on_message(message: DiscordMessage):
             f"Thread message to process - {message.author}: {message.content[:50]} - {thread.name} {thread.jump_url}"
         )
 
-        channel = await message.guild.fetch_channel(message.reference.channel_id)
+        channel = await message.guild.fetch_channel(thread.parent_id)
         prompt = "You are a discord user"
         config = CompletionsConfig()
         if channel:
-            original_message = await channel.fetch_message(message.reference.message_id)
+            original_message = await channel.fetch_message(thread.id)
             if original_message is not None and len(original_message.embeds) > 0:
                 embed = original_message.embeds[0]
                 if len(embed.fields) > 0:
                     prompt = embed.fields[0].value
-                config = CompletionsConfig.from_str(embed.footer)
+                if isinstance(embed.footer, str):
+                    config = CompletionsConfig.from_str(embed.footer)
+                else:
+                    config = CompletionsConfig.from_str(embed.footer.text)
+
                         
 
         channel_messages = [
