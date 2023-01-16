@@ -431,7 +431,7 @@ async def on_message(message: DiscordMessage):
                 if embed.footer is not None:
                     if isinstance(embed.footer, str):
                         config = CompletionsConfig.from_str(embed.footer)
-                    else:
+                    elif embed.footer.text is not None:
                         config = CompletionsConfig.from_str(embed.footer.text)
 
                         
