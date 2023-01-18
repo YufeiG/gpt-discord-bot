@@ -91,7 +91,7 @@ async def character_command(int: discord.Interaction, instructions: str):
             description=f"<@{user.id}> created a character! 🎬🤖",
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="Instructions", value=instructions)
+        embed.add_field(name="Character background", value=instructions)
         if len(flagged_str) > 0:
             # message was flagged
             embed.color = discord.Color.yellow()

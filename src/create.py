@@ -208,7 +208,7 @@ async def create_chat(
                 color=discord.Color.from_str("#e7779d"),
             )
             embed.add_field(
-                name=f"Instructions by {instructions_user_name}", value=instructions
+                name=f"Character by {instructions_user_name}", value=instructions
             )
             embed.set_footer(text=config.to_str())
 
