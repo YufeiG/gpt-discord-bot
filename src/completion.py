@@ -51,9 +51,9 @@ class CompletionsConfig:
                 self.temperature = float(temp_str)
                 self.temperature = max(min(self.temperature, 2), 0)
             except ValueError:
-                self.temperature = 1.2
+                self.temperature = 1.1
         else:
-            self.temperature = 1.2
+            self.temperature = 1.1
         if top_str is not None:
             try:
                 self.top_p = float(top_str)

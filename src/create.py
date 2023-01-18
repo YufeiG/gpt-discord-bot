@@ -112,7 +112,7 @@ class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
         self.bot_name = bot_name
         self.temp = discord.ui.TextInput(
             label=f"temperature: number [0, 2]",
-            placeholder="1.2",
+            placeholder="1.1",
             style=discord.TextStyle.short,
             required=False,
         )
