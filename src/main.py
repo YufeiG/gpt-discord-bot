@@ -60,8 +60,9 @@ async def on_ready():
 @discord.app_commands.checks.bot_has_permissions(send_messages=True)
 @discord.app_commands.checks.bot_has_permissions(view_channel=True)
 @discord.app_commands.checks.bot_has_permissions(manage_threads=True)
-async def character_command(int: discord.Interaction, instructions: str):
+async def character_command(int: discord.Interaction, backstory: str):
     try:
+        instructions = backstory
         # only support creating thread in text channel
         if not isinstance(int.channel, discord.TextChannel):
             return
@@ -91,7 +92,7 @@ async def character_command(int: discord.Interaction, instructions: str):
             description=f"<@{user.id}> created a character! 🎬🤖",
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="Character background", value=instructions)
+        embed.add_field(name="Backstory", value=instructions)
         if len(flagged_str) > 0:
             # message was flagged
             embed.color = discord.Color.yellow()
