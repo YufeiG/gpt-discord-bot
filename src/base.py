@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import List, Optional
 
 SEPARATOR_TOKEN = "<|endoftext|>"
 
@@ -35,6 +35,7 @@ class Config:
     name: str
     instructions: str
 
+
 @dataclass(frozen=True)
 class Prompt:
     header: Message
@@ -42,8 +43,10 @@ class Prompt:
 
     def render(self):
         return f"\n{SEPARATOR_TOKEN}".join(
-            ["YOU ARE AN ACTOR! FOLLOW YOUR INSTRUCTIONS TO ACT OUT THE CHARACTER AND THE SCENE.\n",
-            self.header.render()]
+            [
+                "YOU ARE AN ACTOR! FOLLOW YOUR INSTRUCTIONS TO ACT OUT THE CHARACTER AND THE SCENE.\n",
+                self.header.render(),
+            ]
             + [Message("System", "Conversation:").render()]
             + [self.convo.render()],
         )

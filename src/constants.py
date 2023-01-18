@@ -1,6 +1,7 @@
-from dotenv import load_dotenv
 import os
 from typing import Dict, List
+
+from dotenv import load_dotenv
 
 load_dotenv()
 

@@ -1,16 +1,19 @@
-from enum import Enum
-from dataclasses import dataclass
-import openai
-from src.moderation import moderate_message
-from typing import Optional, List
-import discord
-from src.base import Message, Prompt, Conversation
-from src.utils import split_into_shorter_messages, close_thread, logger
-from src.moderation import (
-    send_moderation_flagged_message,
-    send_moderation_blocked_message,
-)
 import re
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Optional, Tuple
+
+import discord
+import openai
+
+from src.base import Conversation, Message, Prompt
+from src.moderation import (
+    moderate_message,
+    send_moderation_blocked_message,
+    send_moderation_flagged_message,
+)
+from src.utils import close_thread, logger, split_into_shorter_messages
+
 
 class CompletionResult(Enum):
     OK = 0
@@ -27,6 +30,7 @@ class CompletionData:
     reply_text: Optional[str]
     status_text: Optional[str]
 
+
 class CompletionsConfig:
     temperature: float
     top_p: float
@@ -34,7 +38,14 @@ class CompletionsConfig:
     frequency_penalty: float
     max_tokens: int
 
-    def __init__(self, temp_str: Optional[str]=None, top_str: Optional[str]=None, pres_str: Optional[str]=None, freq_str: Optional[str]=None, max_tokens_str: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        temp_str: Optional[str] = None,
+        top_str: Optional[str] = None,
+        pres_str: Optional[str] = None,
+        freq_str: Optional[str] = None,
+        max_tokens_str: Optional[str] = None,
+    ) -> None:
         if temp_str is not None:
             try:
                 self.temperature = float(temp_str)
@@ -71,32 +82,43 @@ class CompletionsConfig:
         if max_tokens_str is not None:
             try:
                 self.max_tokens = int(max_tokens_str)
-                self.max_tokens = max(min(self.max_tokens, 300), 1)
+                self.max_tokens = max(min(self.max_tokens, 500), 1)
             except ValueError:
-                self.max_tokens = 300
+                self.max_tokens = 250
         else:
-            self.max_tokens = 300
+            self.max_tokens = 250
+
     def to_str(self) -> str:
         return f"temperature:{self.temperature},top_p:{self.top_p},presence_penalty:{self.presence_penalty},frequency_penalty:{self.frequency_penalty},max_tokens:{self.max_tokens}"
 
     @classmethod
     def from_str(cls, str) -> "CompletionsConfig":
-        matches = re.match('temperature:([\d\.]+),top_p:([\d\.]+),presence_penalty:([\d\.]+),frequency_penalty:([\d\.]+),max_tokens:([\d\.]+)', str)
+        matches = re.match(
+            "temperature:([\d\.]+),top_p:([\d\.]+),presence_penalty:([\d\.]+),frequency_penalty:([\d\.]+),max_tokens:([\d\.]+)",
+            str,
+        )
         if matches is not None:
             temp, topp, presp, freqp, maxt = matches.groups()
-            return CompletionsConfig(temp_str=temp, top_str=topp, pres_str=presp, freq_str=freqp, max_tokens_str=maxt)
+            return CompletionsConfig(
+                temp_str=temp,
+                top_str=topp,
+                pres_str=presp,
+                freq_str=freqp,
+                max_tokens_str=maxt,
+            )
         return CompletionsConfig()
+
 
 async def generate_completion_response(
     bot_name: str,
-    bot_instruction:str,
-    messages: List[Message], user: str, config: CompletionsConfig
+    bot_instruction: str,
+    messages: List[Message],
+    user: str,
+    config: CompletionsConfig,
 ) -> CompletionData:
     try:
         prompt = Prompt(
-            header=Message(
-                "System", f"Instructions for {bot_name}: {bot_instruction}"
-            ),
+            header=Message("System", f"Instructions for {bot_name}: {bot_instruction}"),
             convo=Conversation(messages + [Message(bot_name)]),
         )
         rendered = prompt.render()
@@ -109,7 +131,14 @@ async def generate_completion_response(
             stop=["<|endoftext|>"],
             presence_penalty=config.presence_penalty,
             frequency_penalty=config.frequency_penalty,
-            logit_bias={"25":-80, "1298": -80, "2599": -80, "1058": -80, "47308": -80, "11207": -80}, # all to avoid :
+            logit_bias={
+                "25": -80,
+                "1298": -80,
+                "2599": -80,
+                "1058": -80,
+                "47308": -80,
+                "11207": -80,
+            },  # all to avoid :
             user=user,
         )
         reply = response.choices[0].text.strip()
@@ -217,3 +246,23 @@ async def process_response(
                 color=discord.Color.yellow(),
             )
         )
+
+
+async def character_info_from_thread(
+    guild: discord.Guild, thread: discord.Thread
+) -> Tuple[CompletionsConfig, str]:
+    channel = await guild.fetch_channel(thread.parent_id)
+    prompt = "You are a discord user"
+    config = CompletionsConfig()
+    if channel:
+        original_message = await channel.fetch_message(thread.id)
+        if original_message is not None and len(original_message.embeds) > 0:
+            embed = original_message.embeds[0]
+            if len(embed.fields) > 0:
+                prompt = embed.fields[0].value
+            if embed.footer is not None:
+                if isinstance(embed.footer, str):
+                    config = CompletionsConfig.from_str(embed.footer)
+                elif embed.footer.text is not None:
+                    config = CompletionsConfig.from_str(embed.footer.text)
+    return (config, prompt)

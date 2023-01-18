@@ -1,11 +1,13 @@
+from typing import Optional, Tuple
+
+import discord
+import openai
+
 from src.constants import (
-    SERVER_TO_MODERATION_CHANNEL,
     MODERATION_VALUES_FOR_BLOCKED,
     MODERATION_VALUES_FOR_FLAGGED,
+    SERVER_TO_MODERATION_CHANNEL,
 )
-import openai
-from typing import Optional, Tuple
-import discord
 from src.utils import logger
 
 
