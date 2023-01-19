@@ -24,7 +24,6 @@ async def discord_message_to_message(message: DiscordMessage) -> Optional[Messag
     else:
         if message.content:
             return Message(user=message.author.name, text=message.content)
-    logger.info(f"Empty message {message} {message.content} {message.embeds}")
     return None
 
 
