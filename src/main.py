@@ -2,11 +2,10 @@ import asyncio
 
 import discord
 from discord import Message as DiscordMessage
-
 from src.completion import (
     character_info_from_thread,
     generate_completion_response,
-    process_response,
+    process_response, generate_summary
 )
 from src.constants import (
     ACTIVATE_THREAD_PREFX,
@@ -29,7 +28,9 @@ from src.utils import (
     logger,
     should_block,
 )
+from typing import Optional, Union
 
+import openai
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -119,6 +120,103 @@ async def character_command(int: discord.Interaction, backstory: str):
             logger.exception(e)
 
 
+# /characterize message:
+@tree.command(
+    name="visualize",
+    description="Illustrate this story, can only be used in a thread.",
+)
+@discord.app_commands.checks.has_permissions(send_messages=True)
+@discord.app_commands.checks.has_permissions(view_channel=True)
+@discord.app_commands.checks.bot_has_permissions(send_messages=True)
+@discord.app_commands.checks.bot_has_permissions(view_channel=True)
+@discord.app_commands.checks.bot_has_permissions(manage_threads=True)
+async def visualize(interaction: discord.Interaction, style: str='digital art'):
+    try:
+        thread = await process_thread(channel=interaction.channel)
+        if thread is None:
+            return
+
+        await interaction.response.defer()
+
+        config, prompt = await character_info_from_thread(
+            guild=interaction.guild, thread=thread
+        )
+        channel_messages = [
+            await discord_message_to_message(message)
+            async for message in thread.history(limit=MAX_THREAD_MESSAGES)
+        ]
+        channel_messages = [x for x in channel_messages if x is not None]
+        channel_messages.reverse()
+
+        # generate the response
+
+        response_data = await generate_summary(
+            bot_name=client.user.name,
+            bot_instruction=prompt,
+            messages=channel_messages,
+            user=str(interaction.user.id),
+            config=config,
+        )
+        status = response_data.status
+        reply_text = response_data.reply_text
+        status_text = response_data.status_text
+        if reply_text is None:
+            return None
+        response =  openai.Image.create(
+            prompt=f"{reply_text}, {style}",
+            n=1,
+            size="256x256"
+        )
+        image_url = response['data'][0]['url']
+
+        embed = discord.Embed(
+            description=f"<@{interaction.user.id}> requested a visualization!",
+            color=discord.Color.fuchsia(),
+        )
+        embed.add_field(name="Summary", value=reply_text)
+        embed.set_image(url=image_url)
+        await interaction.followup.send(embed=embed)
+ 
+    except Exception as e:
+        logger.exception(e)
+        try:
+            await interaction.response.send_message(
+                f"Failed to visualize {str(e)}", ephemeral=True
+            )
+        except Exception as e:
+            logger.exception(e)
+
+async def process_thread(channel: Optional[Union[discord.abc.GuildChannel, discord.PartialMessageable, discord.Thread]]) -> Optional[discord.Thread]:
+    if channel is None:
+        return None
+        # block servers not in allow list
+    if should_block(guild=channel.guild):
+        return None
+
+    # ignore messages not in a thread
+    if not isinstance(channel, discord.Thread):
+        return None
+
+    # ignore threads not created by the bot
+    thread = channel
+    if thread.owner_id != client.user.id:
+        return None
+
+    # ignore threads that are archived locked or title is not what we want
+    if (
+        thread.archived
+        or thread.locked
+        or not thread.name.startswith(ACTIVATE_THREAD_PREFX)
+    ):
+        # ignore this thread
+        return None
+
+    if thread.message_count > MAX_THREAD_MESSAGES:
+        # too many messages, no longer going to reply
+        await close_thread(thread=thread)
+        return None
+    return thread
+
 # calls for each message
 @client.event
 async def on_message(message: DiscordMessage):
@@ -127,32 +225,8 @@ async def on_message(message: DiscordMessage):
         if message.author == client.user:
             return
 
-        # block servers not in allow list
-        if should_block(guild=message.guild):
-            return
-
-        # ignore messages not in a thread
-        channel = message.channel
-        if not isinstance(channel, discord.Thread):
-            return
-
-        # ignore threads not created by the bot
-        thread = channel
-        if thread.owner_id != client.user.id:
-            return
-
-        # ignore threads that are archived locked or title is not what we want
-        if (
-            thread.archived
-            or thread.locked
-            or not thread.name.startswith(ACTIVATE_THREAD_PREFX)
-        ):
-            # ignore this thread
-            return
-
-        if thread.message_count > MAX_THREAD_MESSAGES:
-            # too many messages, no longer going to reply
-            await close_thread(thread=thread)
+        thread = await process_thread(channel=message.channel)
+        if thread is None:
             return
 
         # moderate the message

@@ -108,6 +108,19 @@ class CompletionsConfig:
             )
         return CompletionsConfig()
 
+async def generate_summary(
+    bot_name: str,
+    bot_instruction: str,
+    messages: List[Message],
+    user: str,
+    config: CompletionsConfig,
+) -> CompletionData:
+    prompt = Prompt(
+        header=Message("Instructions", "Provide a summary for the following script."),
+        convo=Conversation(messages + [Message('Summary')]),
+    )
+    return await _generate_response(prompt=prompt, user=user, config=config)
+
 
 async def generate_completion_response(
     bot_name: str,
@@ -116,11 +129,18 @@ async def generate_completion_response(
     user: str,
     config: CompletionsConfig,
 ) -> CompletionData:
+    prompt = Prompt(
+        header=Message("System", f"Instructions for {bot_name}: {bot_instruction}"),
+        convo=Conversation(messages + [Message(bot_name)]),
+    )
+    return await _generate_response(prompt=prompt, user=user, config=config)
+
+async def _generate_response(
+    prompt: Prompt,
+    user: str,
+    config: CompletionsConfig,
+) -> CompletionData:
     try:
-        prompt = Prompt(
-            header=Message("System", f"Instructions for {bot_name}: {bot_instruction}"),
-            convo=Conversation(messages + [Message(bot_name)]),
-        )
         rendered = prompt.render()
         response = openai.Completion.create(
             engine="text-davinci-003",
