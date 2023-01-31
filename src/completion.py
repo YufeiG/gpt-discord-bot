@@ -108,6 +108,7 @@ class CompletionsConfig:
             )
         return CompletionsConfig()
 
+
 async def generate_summary(
     bot_name: str,
     bot_instruction: str,
@@ -116,8 +117,25 @@ async def generate_summary(
     config: CompletionsConfig,
 ) -> CompletionData:
     prompt = Prompt(
-        header=Message("Instructions", "Provide a summary for the following script."),
-        convo=Conversation(messages + [Message('Summary')]),
+        header=Message("Instructions", "Provide a summary of the following story."),
+        convo=Conversation(messages + [Message("Summary")]),
+    )
+    return await _generate_response(prompt=prompt, user=user, config=config)
+
+
+async def generate_visual(
+    bot_name: str,
+    bot_instruction: str,
+    messages: List[Message],
+    user: str,
+    config: CompletionsConfig,
+) -> CompletionData:
+    prompt = Prompt(
+        header=Message(
+            "Instructions",
+            "Provide a short description of an image depicting the following story.",
+        ),
+        convo=Conversation(messages + [Message("Imagery")]),
     )
     return await _generate_response(prompt=prompt, user=user, config=config)
 
@@ -134,6 +152,7 @@ async def generate_completion_response(
         convo=Conversation(messages + [Message(bot_name)]),
     )
     return await _generate_response(prompt=prompt, user=user, config=config)
+
 
 async def _generate_response(
     prompt: Prompt,
