@@ -292,10 +292,6 @@ async def process_thread(
         # ignore this thread
         return None
 
-    if thread.message_count > MAX_THREAD_MESSAGES:
-        # too many messages, no longer going to reply
-        await close_thread(thread=thread)
-        return None
     return thread
 
 
