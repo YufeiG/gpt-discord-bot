@@ -181,7 +181,7 @@ async def summarize(interaction: discord.Interaction):
     except Exception as e:
         logger.exception(e)
         try:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"Failed to summarize {str(e)}", ephemeral=True
             )
         except Exception as e:
@@ -256,7 +256,7 @@ async def visualize(interaction: discord.Interaction, style: str = "digital art"
     except Exception as e:
         logger.exception(e)
         try:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"Failed to visualize {str(e)}", ephemeral=True
             )
         except Exception as e:
