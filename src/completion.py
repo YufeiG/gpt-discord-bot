@@ -118,7 +118,7 @@ async def generate_summary(
 ) -> CompletionData:
     prompt = Prompt(
         header=Message("Instructions", "Provide a summary of the following story."),
-        convo=Conversation(messages + [Message("Summary")]),
+        convo=Conversation([Message("Setting", bot_instruction)] + messages + [Message("Summary")]),
     )
     return await _generate_response(prompt=prompt, user=user, config=config)
 
@@ -135,7 +135,7 @@ async def generate_visual(
             "Instructions",
             "Provide a short description of an image depicting the following story.",
         ),
-        convo=Conversation(messages + [Message("Imagery")]),
+        convo=Conversation([Message("Setting", bot_instruction)] + messages + [Message("Imagery")]),
     )
     return await _generate_response(prompt=prompt, user=user, config=config)
 
