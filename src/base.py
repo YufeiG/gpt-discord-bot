@@ -35,16 +35,22 @@ class Config:
     name: str
     instructions: str
 
+@dataclass(frozen=True)
+class Preprompt:
+    displayText: str
+    promptText: str
+
 
 @dataclass(frozen=True)
 class Prompt:
+    preprompt: str
     header: Message
     convo: Conversation
 
     def render(self):
         return f"\n{SEPARATOR_TOKEN}".join(
             [
-                "YOU ARE AN ACTOR! FOLLOW YOUR INSTRUCTIONS TO ACT OUT THE CHARACTER AND THE SCENE.\n",
+                self.preprompt,
                 self.header.render(),
             ]
             + [Message("System", "Conversation:").render()]

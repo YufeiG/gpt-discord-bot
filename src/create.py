@@ -15,12 +15,30 @@ from src.moderation import (
 )
 from src.save import save_a_copy
 from src.utils import logger, should_block
+from src.base import Preprompt
 
+actor=Preprompt(displayText="Actor", promptText="You are an actor. Follow the instructions to act out the character and the scene.")
+dnd_player=Preprompt(displayText="Playing DnD", promptText="You are particpating in a dnd campaign, play your character as described below.")
+you_are_you=Preprompt(displayText="No preprompt", promptText="")
+assistant=Preprompt(displayText="AI Assistant", promptText="You are an AI assistant, ready to help with anything.")
+teacher=Preprompt(displayText="Teacher", promptText="You are a teacher, you are knowledgeable on a variety of topics.")
 
 class CharacterEmbedView(discord.ui.View):
     def __init__(self, bot_name):
         super().__init__(timeout=None)
         self.bot_name = bot_name
+        self.selected_preprompt = actor.promptText
+
+    @discord.ui.select(cls=discord.ui.Select, custom_id="select", options=[
+        discord.SelectOption(label=actor.displayText, value=actor.promptText, default=True, emoji="🎬"),
+        discord.SelectOption(label=assistant.displayText, value=assistant.promptText, emoji="🤖"),
+        discord.SelectOption(label=teacher.displayText, value=teacher.promptText,  emoji="👩‍🏫"),
+        discord.SelectOption(label=dnd_player.displayText, value=dnd_player.promptText, emoji="🎲"),
+        discord.SelectOption(label=you_are_you.displayText, value=you_are_you.promptText, emoji="🪞"),
+    ])
+    async def preprompt_selector(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.selected_preprompt = select.values[0]
+        await interaction.response.send_message(content=f"✅ You've selected '{self.selected_preprompt}'", ephemeral=True)
 
     @discord.ui.button(
         label="Start Chat", custom_id="chat", style=discord.ButtonStyle.green
@@ -46,6 +64,7 @@ class CharacterEmbedView(discord.ui.View):
             member = "Unknown"
         await create_chat(
             int=interaction,
+            preprompt=self.selected_preprompt,
             instructions_user_name=member.name,
             instructions=instruction,
             config=CompletionsConfig(),
@@ -80,6 +99,7 @@ class CharacterEmbedView(discord.ui.View):
             instructions=instruction,
             instructions_user_name=member.name,
             bot_name=self.bot_name,
+            preprompt=self.selected_preprompt,
         )
         await interaction.response.send_modal(form)
 
@@ -105,10 +125,11 @@ class SaveThreadView(discord.ui.View):
 
 
 class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
-    def __init__(self, instructions: str, instructions_user_name: str, bot_name: str):
+    def __init__(self, instructions: str, instructions_user_name: str, bot_name: str, preprompt: str):
         super().__init__(timeout=None)
         self.instructions = instructions
         self.instructions_user_name = instructions_user_name
+        self.preprompt = preprompt
         self.bot_name = bot_name
         self.temp = discord.ui.TextInput(
             label=f"temperature: number [0, 2]",
@@ -155,6 +176,7 @@ class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
 
         await create_chat(
             int=interaction,
+            preprompt=self.preprompt,
             instructions_user_name=self.instructions_user_name,
             instructions=self.instructions,
             config=CompletionsConfig(
@@ -170,6 +192,7 @@ class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
 
 async def create_chat(
     int: discord.Interaction,
+    preprompt: str, 
     instructions_user_name: str,
     instructions: str,
     config: CompletionsConfig,
@@ -208,7 +231,10 @@ async def create_chat(
                 color=discord.Color.from_str("#e7779d"),
             )
             embed.add_field(
-                name=f"Character by {instructions_user_name}", value=instructions
+                name=f"Instructions", value=preprompt, inline=False
+            )
+            embed.add_field(
+                name=f"Character by {instructions_user_name}", value=instructions, inline=False
             )
             embed.set_footer(text=config.to_str())
 
@@ -244,6 +270,7 @@ async def create_chat(
         # generate the response
         async with thread.typing():
             response_data = await generate_completion_response(
+                preprompt=preprompt,
                 bot_name=bot_name,
                 bot_instruction=instructions,
                 messages=[],

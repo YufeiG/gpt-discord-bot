@@ -39,6 +39,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 
+
 class PersistentClient(discord.Client):
     async def setup_hook(self) -> None:
         self.add_view(CharacterEmbedView(bot_name=self.user.name))
@@ -142,7 +143,7 @@ async def summarize(interaction: discord.Interaction):
 
         await interaction.response.defer()
 
-        config, prompt = await character_info_from_thread(
+        config, prompt, _ = await character_info_from_thread(
             guild=interaction.guild, thread=thread
         )
         channel_messages = [
@@ -206,7 +207,7 @@ async def visualize(interaction: discord.Interaction, style: str = "digital art"
 
         await interaction.response.defer()
 
-        config, prompt = await character_info_from_thread(
+        config, prompt, _ = await character_info_from_thread(
             guild=interaction.guild, thread=thread
         )
         config.max_tokens = 50
@@ -365,7 +366,7 @@ async def on_message(message: DiscordMessage):
             f"Thread message to process - {message.author}: {message.content[:50]} - {thread.name} {thread.jump_url}"
         )
 
-        config, prompt = await character_info_from_thread(
+        config, prompt, preprompt = await character_info_from_thread(
             guild=message.guild, thread=thread
         )
         channel_messages = [
@@ -378,6 +379,7 @@ async def on_message(message: DiscordMessage):
         # generate the response
         async with thread.typing():
             response_data = await generate_completion_response(
+                preprompt=preprompt,
                 bot_name=client.user.name,
                 bot_instruction=prompt,
                 messages=channel_messages,

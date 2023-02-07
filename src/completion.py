@@ -117,6 +117,7 @@ async def generate_summary(
     config: CompletionsConfig,
 ) -> CompletionData:
     prompt = Prompt(
+        preprompt="",
         header=Message("Instructions", "Provide a summary of the following story."),
         convo=Conversation([Message("Setting", bot_instruction)] + messages + [Message("Summary")]),
     )
@@ -131,6 +132,7 @@ async def generate_visual(
     config: CompletionsConfig,
 ) -> CompletionData:
     prompt = Prompt(
+        preprompt="",
         header=Message(
             "Instructions",
             "Provide a short description of an image depicting the following story.",
@@ -141,6 +143,7 @@ async def generate_visual(
 
 
 async def generate_completion_response(
+    preprompt: str,
     bot_name: str,
     bot_instruction: str,
     messages: List[Message],
@@ -148,6 +151,7 @@ async def generate_completion_response(
     config: CompletionsConfig,
 ) -> CompletionData:
     prompt = Prompt(
+        preprompt=preprompt,
         header=Message("System", f"Instructions for {bot_name}: {bot_instruction}"),
         convo=Conversation(messages + [Message(bot_name)]),
     )
@@ -289,7 +293,7 @@ async def process_response(
 
 async def character_info_from_thread(
     guild: discord.Guild, thread: discord.Thread
-) -> Tuple[CompletionsConfig, str]:
+) -> Tuple[CompletionsConfig, str, str]:
     channel = await guild.fetch_channel(thread.parent_id)
     prompt = "You are a discord user"
     config = CompletionsConfig()
@@ -297,11 +301,15 @@ async def character_info_from_thread(
         original_message = await channel.fetch_message(thread.id)
         if original_message is not None and len(original_message.embeds) > 0:
             embed = original_message.embeds[0]
-            if len(embed.fields) > 0:
+            if len(embed.fields) == 2:
+                preprompt = embed.fields[0].value
+                prompt = embed.fields[1].value
+            elif len(embed.fields) == 1:
+                preprompt = ""
                 prompt = embed.fields[0].value
             if embed.footer is not None:
                 if isinstance(embed.footer, str):
                     config = CompletionsConfig.from_str(embed.footer)
                 elif embed.footer.text is not None:
                     config = CompletionsConfig.from_str(embed.footer.text)
-    return (config, prompt)
+    return (config, prompt, preprompt)
