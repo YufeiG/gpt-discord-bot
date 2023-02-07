@@ -148,7 +148,7 @@ async def summarize(interaction: discord.Interaction):
         )
         channel_messages = [
             await discord_message_to_message(message)
-            async for message in thread.history(limit=MAX_THREAD_MESSAGES)
+            async for message in thread.history(limit=15)
         ]
         channel_messages = [x for x in channel_messages if x is not None]
         channel_messages.reverse()
@@ -213,7 +213,7 @@ async def visualize(interaction: discord.Interaction, style: str = "digital art"
         config.max_tokens = 50
         channel_messages = [
             await discord_message_to_message(message)
-            async for message in thread.history(limit=MAX_THREAD_MESSAGES)
+            async for message in thread.history(limit=15)
         ]
         channel_messages = [x for x in channel_messages if x is not None]
         channel_messages.reverse()
