@@ -16,7 +16,7 @@ from src.constants import (
     MAX_THREAD_MESSAGES,
     SECONDS_DELAY_RECEIVING_MSG,
 )
-from src.create import CharacterEmbedView, SaveThreadView
+from src.create import CharacterEmbedView, SaveThreadView, ThreadGenerationView
 from src.moderation import (
     moderate_message,
     send_moderation_blocked_message,
@@ -44,6 +44,7 @@ class PersistentClient(discord.Client):
     async def setup_hook(self) -> None:
         self.add_view(CharacterEmbedView(bot_name=self.user.name))
         self.add_view(SaveThreadView())
+        self.add_view(ThreadGenerationView())
 
 
 client = PersistentClient(intents=intents)
@@ -232,7 +233,7 @@ async def visualize(interaction: discord.Interaction, style: str = "digital art"
         status_text = response_data.status_text
         if reply_text is None:
             await interaction.followup.send(
-                content=f"Failed to visualize. {status_text}", emphemeral=True
+                content=f"Failed to visualize. {status_text}", ephemeral=True
             )
 
             return
@@ -251,7 +252,7 @@ async def visualize(interaction: discord.Interaction, style: str = "digital art"
         embed.add_field(name="Imagery", value=reply_text)
         embed.set_image(url="attachment://image.png")
         await interaction.followup.send(
-            file=discord.File(io.BytesIO(image), filename="image.png"), embed=embed
+            file=discord.File(io.BytesIO(image), filename="image.png"), embed=embed, view=ThreadGenerationView()
         )
 
     except Exception as e:

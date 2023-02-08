@@ -290,26 +290,34 @@ async def process_response(
             )
         )
 
-
-async def character_info_from_thread(
+async def starter_message_from_thread(
     guild: discord.Guild, thread: discord.Thread
-) -> Tuple[CompletionsConfig, str, str]:
+) -> Tuple[Optional[str],Optional[discord.Embed]]:
     channel = await guild.fetch_channel(thread.parent_id)
-    prompt = "You are a discord user"
-    config = CompletionsConfig()
     if channel:
         original_message = await channel.fetch_message(thread.id)
         if original_message is not None and len(original_message.embeds) > 0:
             embed = original_message.embeds[0]
-            if len(embed.fields) == 2:
-                preprompt = embed.fields[0].value
-                prompt = embed.fields[1].value
-            elif len(embed.fields) == 1:
-                preprompt = ""
-                prompt = embed.fields[0].value
-            if embed.footer is not None:
-                if isinstance(embed.footer, str):
-                    config = CompletionsConfig.from_str(embed.footer)
-                elif embed.footer.text is not None:
-                    config = CompletionsConfig.from_str(embed.footer.text)
+            return (original_message, embed)
+        return (original_message, None)
+    return (None, None)
+
+async def character_info_from_thread(
+    guild: discord.Guild, thread: discord.Thread
+) -> Tuple[CompletionsConfig, str, str]:
+    prompt = "You are a discord user"
+    config = CompletionsConfig()
+    _, embed = await starter_message_from_thread(guild=guild, thread=thread)
+    if embed:
+        if len(embed.fields) == 2:
+            preprompt = embed.fields[0].value
+            prompt = embed.fields[1].value
+        elif len(embed.fields) == 1:
+            preprompt = ""
+            prompt = embed.fields[0].value
+        if embed.footer is not None:
+            if isinstance(embed.footer, str):
+                config = CompletionsConfig.from_str(embed.footer)
+            elif embed.footer.text is not None:
+                config = CompletionsConfig.from_str(embed.footer.text)
     return (config, prompt, preprompt)

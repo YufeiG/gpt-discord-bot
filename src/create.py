@@ -6,6 +6,7 @@ from src.completion import (
     CompletionsConfig,
     generate_completion_response,
     process_response,
+    starter_message_from_thread,
 )
 from src.constants import ACTIVATE_THREAD_PREFX
 from src.moderation import (
@@ -38,7 +39,7 @@ class CharacterEmbedView(discord.ui.View):
     ])
     async def preprompt_selector(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.selected_preprompt = select.values[0]
-        await interaction.response.send_message(content=f"✅ You've selected '{self.selected_preprompt}'", ephemeral=True)
+        await interaction.response.defer()
 
     @discord.ui.button(
         label="Start Chat", custom_id="chat", style=discord.ButtonStyle.green
@@ -122,6 +123,32 @@ class SaveThreadView(discord.ui.View):
             await interaction.response.send_message(
                 content=f"**Error**: Failed to save. {str(e)}", ephemeral=True
             )
+
+class ThreadGenerationView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Pin", emoji="📌", custom_id="pin", style=discord.ButtonStyle.secondary
+    )
+    async def pin_action(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        if interaction.channel is not None and isinstance(interaction.channel, discord.Thread):
+            starter, starter_embed = await starter_message_from_thread(guild=interaction.guild, thread=interaction.channel);
+            
+            message = interaction.message
+            if not message or not message.embeds or len(message.embeds) == 0:
+                await interaction.response.send_message(content="Failed", ephemeral=True)
+                return
+            embed = message.embeds[0]
+            image_url = embed.image.url
+
+            starter_embed.set_image(url=image_url)
+            new_message = await starter.edit(embed=starter_embed)
+            await interaction.response.send_message(content=f"[View thread]({new_message.jump_url})", ephemeral=True)
+            return
+        await interaction.response.send_message(content="Something went wrong!", ephemeral=True)
 
 
 class CustomizeForm(discord.ui.Modal, title="Customize API Arguments"):
